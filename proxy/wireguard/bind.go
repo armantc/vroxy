@@ -3,6 +3,7 @@ package wireguard
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/netip"
 	"strconv"
@@ -152,7 +153,7 @@ func (bind *netBindClient) connectTo(endpoint *netEndpoint) error {
 			v.endpoint = endpoint
 			v.err = err
 			v.waiter.Done()
-			if err != nil {
+			if err != nil && errors.Is(err, io.EOF) {
 				endpoint.conn = nil
 				return
 			}

@@ -29,24 +29,27 @@ import (
 
 // Handler is an outbound connection handler for VMess protocol.
 type Handler struct {
-	server        *protocol.ServerSpec
+	serverList    *protocol.ServerList
+	serverPicker  protocol.ServerPicker
 	policyManager policy.Manager
 	cone          bool
 }
 
 // New creates a new VMess outbound handler.
 func New(ctx context.Context, config *Config) (*Handler, error) {
-	if config.Receiver == nil {
-		return nil, errors.New(`no vnext found`)
-	}
-	server, err := protocol.NewServerSpecFromPB(config.Receiver)
-	if err != nil {
-		return nil, errors.New("failed to get server spec").Base(err)
+	serverList := protocol.NewServerList()
+	for _, rec := range config.Receiver {
+		s, err := protocol.NewServerSpecFromPB(rec)
+		if err != nil {
+			return nil, errors.New("failed to parse server spec").Base(err)
+		}
+		serverList.AddServer(s)
 	}
 
 	v := core.MustFromContext(ctx)
 	handler := &Handler{
-		server:        server,
+		serverList:    serverList,
+		serverPicker:  protocol.NewRoundRobinServerPicker(serverList),
 		policyManager: v.GetFeature(policy.ManagerType()).(policy.Manager),
 		cone:          ctx.Value("cone").(bool),
 	}
@@ -64,11 +67,11 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	ob.Name = "vmess"
 	ob.CanSpliceCopy = 3
 
-	rec := h.server
+	var rec *protocol.ServerSpec
 	var conn stat.Connection
-
 	err := retry.ExponentialBackoff(5, 200).On(func() error {
-		rawConn, err := dialer.Dial(ctx, rec.Destination)
+		rec = h.serverPicker.PickServer()
+		rawConn, err := dialer.Dial(ctx, rec.Destination())
 		if err != nil {
 			return err
 		}
@@ -82,7 +85,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	defer conn.Close()
 
 	target := ob.Target
-	errors.LogInfo(ctx, "tunneling request to ", target, " via ", rec.Destination.NetAddr())
+	errors.LogInfo(ctx, "tunneling request to ", target, " via ", rec.Destination().NetAddr())
 
 	command := protocol.RequestCommandTCP
 	if target.Network == net.Network_UDP {
@@ -92,7 +95,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		command = protocol.RequestCommandMux
 	}
 
-	user := rec.User
+	user := rec.PickUser()
 	request := &protocol.RequestHeader{
 		Version: encoding.Version,
 		User:    user,
@@ -199,7 +202,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		if err != nil {
 			return errors.New("failed to read header").Base(err)
 		}
-		h.handleCommand(rec.Destination, header.Command)
+		h.handleCommand(rec.Destination(), header.Command)
 
 		bodyReader, err := session.DecodeResponseBody(request, reader)
 		if err != nil {

@@ -34,52 +34,26 @@ func TestVMessOutbound(t *testing.T) {
 			}`,
 			Parser: loadJSON(creator),
 			Output: &outbound.Config{
-				Receiver: &protocol.ServerEndpoint{
-					Address: &net.IPOrDomain{
-						Address: &net.IPOrDomain_Ip{
-							Ip: []byte{127, 0, 0, 1},
-						},
-					},
-					Port: 80,
-					User: &protocol.User{
-						Email: "love@example.com",
-						Level: 255,
-						Account: serial.ToTypedMessage(&vmess.Account{
-							Id: "e641f5ad-9397-41e3-bf1a-e8740dfed019",
-							SecuritySettings: &protocol.SecurityConfig{
-								Type: protocol.SecurityType_AUTO,
+				Receiver: []*protocol.ServerEndpoint{
+					{
+						Address: &net.IPOrDomain{
+							Address: &net.IPOrDomain_Ip{
+								Ip: []byte{127, 0, 0, 1},
 							},
-						}),
-					},
-				},
-			},
-		},
-		{
-			Input: `{
-				"address": "127.0.0.1",
-				"port": 80,
-				"id": "e641f5ad-9397-41e3-bf1a-e8740dfed019",
-				"email": "love@example.com",
-				"level": 255
-			}`,
-			Parser: loadJSON(creator),
-			Output: &outbound.Config{
-				Receiver: &protocol.ServerEndpoint{
-					Address: &net.IPOrDomain{
-						Address: &net.IPOrDomain_Ip{
-							Ip: []byte{127, 0, 0, 1},
 						},
-					},
-					Port: 80,
-					User: &protocol.User{
-						Email: "love@example.com",
-						Level: 255,
-						Account: serial.ToTypedMessage(&vmess.Account{
-							Id: "e641f5ad-9397-41e3-bf1a-e8740dfed019",
-							SecuritySettings: &protocol.SecurityConfig{
-								Type: protocol.SecurityType_AUTO,
+						Port: 80,
+						User: []*protocol.User{
+							{
+								Email: "love@example.com",
+								Level: 255,
+								Account: serial.ToTypedMessage(&vmess.Account{
+									Id: "e641f5ad-9397-41e3-bf1a-e8740dfed019",
+									SecuritySettings: &protocol.SecurityConfig{
+										Type: protocol.SecurityType_AUTO,
+									},
+								}),
 							},
-						}),
+						},
 					},
 				},
 			},
@@ -105,7 +79,11 @@ func TestVMessInbound(t *testing.T) {
 				],
 				"default": {
 					"level": 0
-				}
+				},
+				"detour": {
+					"to": "tag_to_detour"
+				},
+				"disableInsecureEncryption": true
 			}`,
 			Parser: loadJSON(creator),
 			Output: &inbound.Config{
@@ -123,6 +101,9 @@ func TestVMessInbound(t *testing.T) {
 				},
 				Default: &inbound.DefaultConfig{
 					Level: 0,
+				},
+				Detour: &inbound.DetourConfig{
+					To: "tag_to_detour",
 				},
 			},
 		},

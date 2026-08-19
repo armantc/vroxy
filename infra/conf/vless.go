@@ -34,7 +34,6 @@ type VLessInboundConfig struct {
 	Decryption string                  `json:"decryption"`
 	Fallbacks  []*VLessInboundFallback `json:"fallbacks"`
 	Flow       string                  `json:"flow"`
-	Testseed   []uint32                `json:"testseed"`
 }
 
 // Build implements Buildable
@@ -72,10 +71,6 @@ func (c *VLessInboundConfig) Build() (proto.Message, error) {
 		case vless.XRV:
 		default:
 			return nil, errors.New(`VLESS clients: "flow" doesn't support "` + account.Flow + `" in this version`)
-		}
-
-		if len(account.Testseed) < 4 {
-			account.Testseed = c.Testseed
 		}
 
 		if account.Encryption != "" {
@@ -217,8 +212,6 @@ type VLessOutboundConfig struct {
 	Seed       string                `json:"seed"`
 	Encryption string                `json:"encryption"`
 	Reverse    *vless.Reverse        `json:"reverse"`
-	Testpre    uint32                `json:"testpre"`
-	Testseed   []uint32              `json:"testseed"`
 	Vnext      []*VLessOutboundVnext `json:"vnext"`
 }
 
@@ -235,20 +228,22 @@ func (c *VLessOutboundConfig) Build() (proto.Message, error) {
 		}
 	}
 	if len(c.Vnext) != 1 {
-		return nil, errors.New(`VLESS settings: "vnext" should have one and only one member. Multiple endpoints in "vnext" should use multiple VLESS outbounds and routing balancer instead`)
+		return nil, errors.New(`VLESS settings: "vnext" should have one and only one member`)
 	}
-	for _, rec := range c.Vnext {
+	config.Vnext = make([]*protocol.ServerEndpoint, len(c.Vnext))
+	for idx, rec := range c.Vnext {
 		if rec.Address == nil {
 			return nil, errors.New(`VLESS vnext: "address" is not set`)
 		}
 		if len(rec.Users) != 1 {
-			return nil, errors.New(`VLESS vnext: "users" should have one and only one member. Multiple members in "users" should use multiple VLESS outbounds and routing balancer instead`)
+			return nil, errors.New(`VLESS vnext: "users" should have one and only one member`)
 		}
 		spec := &protocol.ServerEndpoint{
 			Address: rec.Address.Build(),
 			Port:    uint32(rec.Port),
+			User:    make([]*protocol.User, len(rec.Users)),
 		}
-		for _, rawUser := range rec.Users {
+		for idx, rawUser := range rec.Users {
 			user := new(protocol.User)
 			if c.Address != nil {
 				user.Level = c.Level
@@ -265,8 +260,6 @@ func (c *VLessOutboundConfig) Build() (proto.Message, error) {
 				//account.Seed = c.Seed
 				account.Encryption = c.Encryption
 				account.Reverse = c.Reverse
-				account.Testpre = c.Testpre
-				account.Testseed = c.Testseed
 			} else {
 				if err := json.Unmarshal(rawUser, account); err != nil {
 					return nil, errors.New(`VLESS users: invalid user`).Base(err)
@@ -334,11 +327,9 @@ func (c *VLessOutboundConfig) Build() (proto.Message, error) {
 			}
 
 			user.Account = serial.ToTypedMessage(account)
-			spec.User = user
-			break
+			spec.User[idx] = user
 		}
-		config.Vnext = spec
-		break
+		config.Vnext[idx] = spec
 	}
 
 	return config, nil

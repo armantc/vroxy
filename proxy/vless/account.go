@@ -22,8 +22,6 @@ func (a *Account) AsAccount() (protocol.Account, error) {
 		Seconds:    a.Seconds,
 		Padding:    a.Padding,
 		Reverse:    a.Reverse,
-		Testpre:    a.Testpre,
-		Testseed:   a.Testseed,
 	}, nil
 }
 
@@ -40,9 +38,6 @@ type MemoryAccount struct {
 	Padding    string
 
 	Reverse *Reverse
-
-	Testpre  uint32
-	Testseed []uint32
 }
 
 // Equals implements protocol.Account.Equals().
@@ -63,7 +58,5 @@ func (a *MemoryAccount) ToProto() proto.Message {
 		Seconds:    a.Seconds,
 		Padding:    a.Padding,
 		Reverse:    a.Reverse,
-		Testpre:    a.Testpre,
-		Testseed:   a.Testseed,
 	}
 }

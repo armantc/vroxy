@@ -423,16 +423,20 @@ func TestCommanderAddRemoveUser(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&outbound.Config{
-					Receiver: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: serial.ToTypedMessage(&vmess.Account{
-								Id: u2.String(),
-								SecuritySettings: &protocol.SecurityConfig{
-									Type: protocol.SecurityType_AES128_GCM,
+					Receiver: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: serial.ToTypedMessage(&vmess.Account{
+										Id: u2.String(),
+										SecuritySettings: &protocol.SecurityConfig{
+											Type: protocol.SecurityType_AES128_GCM,
+										},
+									}),
 								},
-							}),
+							},
 						},
 					},
 				}),
@@ -596,16 +600,20 @@ func TestCommanderStats(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&outbound.Config{
-					Receiver: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: serial.ToTypedMessage(&vmess.Account{
-								Id: userID.String(),
-								SecuritySettings: &protocol.SecurityConfig{
-									Type: protocol.SecurityType_AES128_GCM,
+					Receiver: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: serial.ToTypedMessage(&vmess.Account{
+										Id: userID.String(),
+										SecuritySettings: &protocol.SecurityConfig{
+											Type: protocol.SecurityType_AES128_GCM,
+										},
+									}),
 								},
-							}),
+							},
 						},
 					},
 				}),

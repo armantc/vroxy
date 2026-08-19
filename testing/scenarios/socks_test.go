@@ -73,14 +73,18 @@ func TestSocksBridgeTCP(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&socks.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: serial.ToTypedMessage(&socks.Account{
-								Username: "Test Account",
-								Password: "Test Password",
-							}),
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: serial.ToTypedMessage(&socks.Account{
+										Username: "Test Account",
+										Password: "Test Password",
+									}),
+								},
+							},
 						},
 					},
 				}),
@@ -148,14 +152,18 @@ func TestSocksWithHttpRequest(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&http.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: serial.ToTypedMessage(&http.Account{
-								Username: "Test Account",
-								Password: "Test Password",
-							}),
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: serial.ToTypedMessage(&http.Account{
+										Username: "Test Account",
+										Password: "Test Password",
+									}),
+								},
+							},
 						},
 					},
 				}),
@@ -248,14 +256,18 @@ func TestSocksBridageUDP(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&socks.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: serial.ToTypedMessage(&socks.Account{
-								Username: "Test Account",
-								Password: "Test Password",
-							}),
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: serial.ToTypedMessage(&socks.Account{
+										Username: "Test Account",
+										Password: "Test Password",
+									}),
+								},
+							},
 						},
 					},
 				}),
@@ -363,9 +375,11 @@ func TestSocksBridageUDPWithRouting(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&socks.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+						},
 					},
 				}),
 			},

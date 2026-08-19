@@ -20,8 +20,7 @@ func TestDNSConfigParsing(t *testing.T) {
 			return config.Build()
 		}
 	}
-	expectedServeStale := true
-	expectedServeExpiredTTL := uint32(172800)
+
 	runMultiTestCase(t, []TestCase{
 		{
 			Input: `{
@@ -29,9 +28,7 @@ func TestDNSConfigParsing(t *testing.T) {
 					"address": "8.8.8.8",
 					"port": 5353,
 					"skipFallback": true,
-					"domains": ["domain:example.com"],
-					"serveStale": true,
-					"serveExpiredTTL": 172800
+					"domains": ["domain:example.com"]
 				}],
 				"hosts": {
 					"domain:example.com": "google.com",
@@ -43,8 +40,6 @@ func TestDNSConfigParsing(t *testing.T) {
 				"clientIp": "10.0.0.1",
 				"queryStrategy": "UseIPv4",
 				"disableCache": true,
-				"serveStale": false,
-				"serveExpiredTTL": 86400,
 				"disableFallback": true
 			}`,
 			Parser: parserCreator(),
@@ -73,9 +68,6 @@ func TestDNSConfigParsing(t *testing.T) {
 								Size: 1,
 							},
 						},
-						ServeStale:      &expectedServeStale,
-						ServeExpiredTTL: &expectedServeExpiredTTL,
-						PolicyID:        1, // Servers with certain identical fields share this ID, incrementing starting from 1. See: Build PolicyID
 					},
 				},
 				StaticHosts: []*dns.Config_HostMapping{
@@ -108,8 +100,6 @@ func TestDNSConfigParsing(t *testing.T) {
 				ClientIp:        []byte{10, 0, 0, 1},
 				QueryStrategy:   dns.QueryStrategy_USE_IP4,
 				DisableCache:    true,
-				ServeStale:      false,
-				ServeExpiredTTL: 86400,
 				DisableFallback: true,
 			},
 		},

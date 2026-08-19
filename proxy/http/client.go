@@ -31,7 +31,7 @@ import (
 )
 
 type Client struct {
-	server        *protocol.ServerSpec
+	serverPicker  protocol.ServerPicker
 	policyManager policy.Manager
 	header        []*Header
 }
@@ -48,17 +48,21 @@ var (
 
 // NewClient create a new http client based on the given config.
 func NewClient(ctx context.Context, config *ClientConfig) (*Client, error) {
-	if config.Server == nil {
-		return nil, errors.New(`no target server found`)
+	serverList := protocol.NewServerList()
+	for _, rec := range config.Server {
+		s, err := protocol.NewServerSpecFromPB(rec)
+		if err != nil {
+			return nil, errors.New("failed to get server spec").Base(err)
+		}
+		serverList.AddServer(s)
 	}
-	server, err := protocol.NewServerSpecFromPB(config.Server)
-	if err != nil {
-		return nil, errors.New("failed to get server spec").Base(err)
+	if serverList.Size() == 0 {
+		return nil, errors.New("0 target server")
 	}
 
 	v := core.MustFromContext(ctx)
 	return &Client{
-		server:        server,
+		serverPicker:  protocol.NewRoundRobinServerPicker(serverList),
 		policyManager: v.GetFeature(policy.ManagerType()).(policy.Manager),
 		header:        config.Header,
 	}, nil
@@ -80,9 +84,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 		return errors.New("UDP is not supported by HTTP outbound")
 	}
 
-	server := c.server
-	dest := server.Destination
-	user := server.User
+	var user *protocol.MemoryUser
 	var conn stat.Connection
 
 	mbuf, _ := link.Reader.ReadMultiBuffer()
@@ -100,6 +102,10 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 	}
 
 	if err := retry.ExponentialBackoff(5, 100).On(func() error {
+		server := c.serverPicker.PickServer()
+		dest := server.Destination()
+		user = server.PickUser()
+
 		netConn, err := setUpHTTPTunnel(ctx, dest, targetAddr, user, dialer, header, firstPayload)
 		if netConn != nil {
 			if _, ok := netConn.(*http2Conn); !ok {
@@ -303,12 +309,6 @@ func setUpHTTPTunnel(ctx context.Context, dest net.Destination, target string, u
 
 	nextProto := ""
 	if tlsConn, ok := iConn.(*tls.Conn); ok {
-		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			rawConn.Close()
-			return nil, err
-		}
-		nextProto = tlsConn.ConnectionState().NegotiatedProtocol
-	} else if tlsConn, ok := iConn.(*tls.UConn); ok {
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			rawConn.Close()
 			return nil, err

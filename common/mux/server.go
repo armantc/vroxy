@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/xtls/xray-core/app/dispatcher"
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/errors"
@@ -63,9 +64,7 @@ func (s *Server) DispatchLink(ctx context.Context, dest net.Destination, link *t
 	if dest.Address != muxCoolAddress {
 		return s.dispatcher.DispatchLink(ctx, dest, link)
 	}
-	if d, ok := s.dispatcher.(routing.WrapLinkDispatcher); ok {
-		link = d.WrapLink(ctx, link)
-	}
+	link = s.dispatcher.(*dispatcher.DefaultDispatcher).WrapLink(ctx, link)
 	worker, err := NewServerWorker(ctx, s.dispatcher, link)
 	if err != nil {
 		return err
@@ -167,14 +166,6 @@ func (w *ServerWorker) handleStatusKeepAlive(meta *FrameMetadata, reader *buf.Bu
 
 func (w *ServerWorker) handleStatusNew(ctx context.Context, meta *FrameMetadata, reader *buf.BufferedReader) error {
 	ctx = session.SubContextFromMuxInbound(ctx)
-	if meta.Inbound != nil && meta.Inbound.Source.IsValid() && meta.Inbound.Local.IsValid() {
-		if inbound := session.InboundFromContext(ctx); inbound != nil {
-			newInbound := *inbound
-			newInbound.Source = meta.Inbound.Source
-			newInbound.Local = meta.Inbound.Local
-			ctx = session.ContextWithInbound(ctx, &newInbound)
-		}
-	}
 	errors.LogInfo(ctx, "received request for ", meta.Target)
 	{
 		msg := &log.AccessMessage{
@@ -338,7 +329,7 @@ func (w *ServerWorker) handleStatusEnd(meta *FrameMetadata, reader *buf.Buffered
 
 func (w *ServerWorker) handleFrame(ctx context.Context, reader *buf.BufferedReader) error {
 	var meta FrameMetadata
-	err := meta.Unmarshal(reader, session.IsReverseMuxFromContext(ctx))
+	err := meta.Unmarshal(reader)
 	if err != nil {
 		return errors.New("failed to read metadata").Base(err)
 	}
@@ -349,7 +340,7 @@ func (w *ServerWorker) handleFrame(ctx context.Context, reader *buf.BufferedRead
 	case SessionStatusEnd:
 		err = w.handleStatusEnd(&meta, reader)
 	case SessionStatusNew:
-		err = w.handleStatusNew(session.ContextWithIsReverseMux(ctx, false), &meta, reader)
+		err = w.handleStatusNew(ctx, &meta, reader)
 	case SessionStatusKeep:
 		err = w.handleStatusKeep(&meta, reader)
 	default:

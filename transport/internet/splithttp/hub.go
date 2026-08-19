@@ -27,14 +27,13 @@ import (
 )
 
 type requestHandler struct {
-	config         *Config
-	host           string
-	path           string
-	ln             *Listener
-	sessionMu      *sync.Mutex
-	sessions       sync.Map
-	localAddr      net.Addr
-	socketSettings *internet.SocketConfig
+	config    *Config
+	host      string
+	path      string
+	ln        *Listener
+	sessionMu *sync.Mutex
+	sessions  sync.Map
+	localAddr net.Addr
 }
 
 type httpSession struct {
@@ -140,17 +139,7 @@ func (h *requestHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
-	var forwardedAddrs []net.Address
-	if h.socketSettings != nil && len(h.socketSettings.TrustedXForwardedFor) > 0 {
-		for _, key := range h.socketSettings.TrustedXForwardedFor {
-			if len(request.Header.Values(key)) > 0 {
-				forwardedAddrs = http_proto.ParseXForwardedFor(request.Header)
-				break
-			}
-		}
-	} else {
-		forwardedAddrs = http_proto.ParseXForwardedFor(request.Header)
-	}
+	forwardedAddrs := http_proto.ParseXForwardedFor(request.Header)
 	var remoteAddr net.Addr
 	var err error
 	remoteAddr, err = net.ResolveTCPAddr("tcp", request.RemoteAddr)
@@ -367,13 +356,12 @@ func ListenXH(ctx context.Context, address net.Address, port net.Port, streamSet
 		}
 	}
 	handler := &requestHandler{
-		config:         l.config,
-		host:           l.config.Host,
-		path:           l.config.GetNormalizedPath(),
-		ln:             l,
-		sessionMu:      &sync.Mutex{},
-		sessions:       sync.Map{},
-		socketSettings: streamSettings.SocketSettings,
+		config:    l.config,
+		host:      l.config.Host,
+		path:      l.config.GetNormalizedPath(),
+		ln:        l,
+		sessionMu: &sync.Mutex{},
+		sessions:  sync.Map{},
 	}
 	tlsConfig := getTLSConfig(streamSettings)
 	l.isH3 = len(tlsConfig.NextProtos) == 1 && tlsConfig.NextProtos[0] == "h3"

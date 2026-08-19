@@ -264,11 +264,7 @@ func fetchInput(ctx context.Context, s *Session, output buf.Writer) {
 		transferType = protocol.TransferTypePacket
 	}
 	s.transferType = transferType
-	var inbound *session.Inbound
-	if session.IsReverseMuxFromContext(ctx) {
-		inbound = session.InboundFromContext(ctx)
-	}
-	writer := NewWriter(s.ID, ob.Target, output, transferType, xudp.GetGlobalID(ctx), inbound)
+	writer := NewWriter(s.ID, ob.Target, output, transferType, xudp.GetGlobalID(ctx))
 	defer s.Close(false)
 	defer writer.Close()
 
@@ -388,7 +384,7 @@ func (m *ClientWorker) fetchOutput() {
 
 	var meta FrameMetadata
 	for {
-		err := meta.Unmarshal(reader, false)
+		err := meta.Unmarshal(reader)
 		if err != nil {
 			if errors.Cause(err) != io.EOF {
 				errors.LogInfoInner(context.Background(), err, "failed to read metadata")

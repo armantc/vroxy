@@ -75,11 +75,15 @@ func TestShadowsocksChaCha20Poly1305TCP(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&shadowsocks.ClientConfig{
-					Server:    &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: account,
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: account,
+								},
+							},
 						},
 					},
 				}),
@@ -167,11 +171,15 @@ func TestShadowsocksAES256GCMTCP(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&shadowsocks.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: account,
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: account,
+								},
+							},
 						},
 					},
 				}),
@@ -260,11 +268,15 @@ func TestShadowsocksAES128GCMUDP(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&shadowsocks.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: account,
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: account,
+								},
+							},
 						},
 					},
 				}),
@@ -358,11 +370,15 @@ func TestShadowsocksAES128GCMUDPMux(t *testing.T) {
 					},
 				}),
 				ProxySettings: serial.ToTypedMessage(&shadowsocks.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: account,
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: account,
+								},
+							},
 						},
 					},
 				}),
@@ -439,11 +455,15 @@ func TestShadowsocksNone(t *testing.T) {
 		Outbound: []*core.OutboundHandlerConfig{
 			{
 				ProxySettings: serial.ToTypedMessage(&shadowsocks.ClientConfig{
-					Server: &protocol.ServerEndpoint{
-						Address: net.NewIPOrDomain(net.LocalHostIP),
-						Port:    uint32(serverPort),
-						User:    &protocol.User{
-							Account: account,
+					Server: []*protocol.ServerEndpoint{
+						{
+							Address: net.NewIPOrDomain(net.LocalHostIP),
+							Port:    uint32(serverPort),
+							User: []*protocol.User{
+								{
+									Account: account,
+								},
+							},
 						},
 					},
 				}),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/xtls/xray-core/app/dispatcher"
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/mux"
 	"github.com/xtls/xray-core/common/net"
@@ -197,11 +198,9 @@ func (w *BridgeWorker) handleInternalConn(link *transport.Link) {
 
 func (w *BridgeWorker) Dispatch(ctx context.Context, dest net.Destination) (*transport.Link, error) {
 	if !isInternalDomain(dest) {
-		if session.InboundFromContext(ctx) == nil {
-			ctx = session.ContextWithInbound(ctx, &session.Inbound{
-				Tag: w.Tag,
-			})
-		}
+		ctx = session.ContextWithInbound(ctx, &session.Inbound{
+			Tag: w.Tag,
+		})
 		return w.Dispatcher.Dispatch(ctx, dest)
 	}
 
@@ -222,17 +221,13 @@ func (w *BridgeWorker) Dispatch(ctx context.Context, dest net.Destination) (*tra
 
 func (w *BridgeWorker) DispatchLink(ctx context.Context, dest net.Destination, link *transport.Link) error {
 	if !isInternalDomain(dest) {
-		if session.InboundFromContext(ctx) == nil {
-			ctx = session.ContextWithInbound(ctx, &session.Inbound{
-				Tag: w.Tag,
-			})
-		}
+		ctx = session.ContextWithInbound(ctx, &session.Inbound{
+			Tag: w.Tag,
+		})
 		return w.Dispatcher.DispatchLink(ctx, dest, link)
 	}
 
-	if d, ok := w.Dispatcher.(routing.WrapLinkDispatcher); ok {
-		link = d.WrapLink(ctx, link)
-	}
+	link = w.Dispatcher.(*dispatcher.DefaultDispatcher).WrapLink(ctx, link)
 	w.handleInternalConn(link)
 
 	return nil

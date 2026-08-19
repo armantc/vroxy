@@ -35,6 +35,33 @@ func getAssetPath(file string) (string, error) {
 	return path, nil
 }
 
+func TestGeoIPMatcherContainer(t *testing.T) {
+	container := &router.GeoIPMatcherContainer{}
+
+	m1, err := container.Add(&router.GeoIP{
+		CountryCode: "CN",
+	})
+	common.Must(err)
+
+	m2, err := container.Add(&router.GeoIP{
+		CountryCode: "US",
+	})
+	common.Must(err)
+
+	m3, err := container.Add(&router.GeoIP{
+		CountryCode: "CN",
+	})
+	common.Must(err)
+
+	if m1 != m3 {
+		t.Error("expect same matcher for same geoip, but not")
+	}
+
+	if m1 == m2 {
+		t.Error("expect different matcher for different geoip, but actually same")
+	}
+}
+
 func TestGeoIPMatcher(t *testing.T) {
 	cidrList := []*router.CIDR{
 		{Ip: []byte{0, 0, 0, 0}, Prefix: 8},
@@ -53,10 +80,8 @@ func TestGeoIPMatcher(t *testing.T) {
 		{Ip: []byte{91, 108, 4, 0}, Prefix: 16},
 	}
 
-	matcher, err := router.BuildOptimizedGeoIPMatcher(&router.GeoIP{
-		Cidr: cidrList,
-	})
-	common.Must(err)
+	matcher := &router.GeoIPMatcher{}
+	common.Must(matcher.Init(cidrList))
 
 	testCases := []struct {
 		Input  string
@@ -115,10 +140,8 @@ func TestGeoIPMatcherRegression(t *testing.T) {
 		{Ip: []byte{98, 108, 20, 0}, Prefix: 23},
 	}
 
-	matcher, err := router.BuildOptimizedGeoIPMatcher(&router.GeoIP{
-		Cidr: cidrList,
-	})
-	common.Must(err)
+	matcher := &router.GeoIPMatcher{}
+	common.Must(matcher.Init(cidrList))
 
 	testCases := []struct {
 		Input  string
@@ -148,11 +171,9 @@ func TestGeoIPReverseMatcher(t *testing.T) {
 		{Ip: []byte{8, 8, 8, 8}, Prefix: 32},
 		{Ip: []byte{91, 108, 4, 0}, Prefix: 16},
 	}
-	matcher, err := router.BuildOptimizedGeoIPMatcher(&router.GeoIP{
-		Cidr: cidrList,
-	})
-	common.Must(err)
-	matcher.SetReverse(true) // Reverse match
+	matcher := &router.GeoIPMatcher{}
+	matcher.SetReverseMatch(true) // Reverse match
+	common.Must(matcher.Init(cidrList))
 
 	testCases := []struct {
 		Input  string
@@ -185,10 +206,8 @@ func TestGeoIPMatcher4CN(t *testing.T) {
 	ips, err := loadGeoIP("CN")
 	common.Must(err)
 
-	matcher, err := router.BuildOptimizedGeoIPMatcher(&router.GeoIP{
-		Cidr: ips,
-	})
-	common.Must(err)
+	matcher := &router.GeoIPMatcher{}
+	common.Must(matcher.Init(ips))
 
 	if matcher.Match([]byte{8, 8, 8, 8}) {
 		t.Error("expect CN geoip doesn't contain 8.8.8.8, but actually does")
@@ -199,10 +218,8 @@ func TestGeoIPMatcher6US(t *testing.T) {
 	ips, err := loadGeoIP("US")
 	common.Must(err)
 
-	matcher, err := router.BuildOptimizedGeoIPMatcher(&router.GeoIP{
-		Cidr: ips,
-	})
-	common.Must(err)
+	matcher := &router.GeoIPMatcher{}
+	common.Must(matcher.Init(ips))
 
 	if !matcher.Match(net.ParseAddress("2001:4860:4860::8888").IP()) {
 		t.Error("expect US geoip contain 2001:4860:4860::8888, but actually not")
@@ -237,10 +254,8 @@ func BenchmarkGeoIPMatcher4CN(b *testing.B) {
 	ips, err := loadGeoIP("CN")
 	common.Must(err)
 
-	matcher, err := router.BuildOptimizedGeoIPMatcher(&router.GeoIP{
-		Cidr: ips,
-	})
-	common.Must(err)
+	matcher := &router.GeoIPMatcher{}
+	common.Must(matcher.Init(ips))
 
 	b.ResetTimer()
 
@@ -253,10 +268,8 @@ func BenchmarkGeoIPMatcher6US(b *testing.B) {
 	ips, err := loadGeoIP("US")
 	common.Must(err)
 
-	matcher, err := router.BuildOptimizedGeoIPMatcher(&router.GeoIP{
-		Cidr: ips,
-	})
-	common.Must(err)
+	matcher := &router.GeoIPMatcher{}
+	common.Must(matcher.Init(ips))
 
 	b.ResetTimer()
 

@@ -108,7 +108,7 @@ func NewHandler(ctx context.Context, config *core.OutboundHandlerConfig) (outbou
 	}
 	h.proxyConfig = proxyConfig
 
-	ctx = session.ContextWithFullHandler(ctx, h)
+	ctx = session.ContextWithHandler(ctx, h)
 
 	rawProxyHandler, err := common.CreateObject(ctx, proxyConfig)
 	if err != nil {
@@ -317,12 +317,8 @@ func (h *Handler) Dial(ctx context.Context, dest net.Destination) (stat.Connecti
 	conn, err := internet.Dial(ctx, dest, h.streamSettings)
 	conn = h.getStatCouterConnection(conn)
 	outbounds := session.OutboundsFromContext(ctx)
-	if outbounds != nil {
-		ob := outbounds[len(outbounds)-1]
-		ob.Conn = conn
-	} else {
-		// for Vision's pre-connect
-	}
+	ob := outbounds[len(outbounds)-1]
+	ob.Conn = conn
 	return conn, err
 }
 

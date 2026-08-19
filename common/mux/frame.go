@@ -11,7 +11,6 @@ import (
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/serial"
-	"github.com/xtls/xray-core/common/session"
 )
 
 type SessionStatus byte
@@ -61,7 +60,6 @@ type FrameMetadata struct {
 	Option        bitmask.Byte
 	SessionStatus SessionStatus
 	GlobalID      [8]byte
-	Inbound       *session.Inbound
 }
 
 func (f FrameMetadata) WriteTo(b *buf.Buffer) error {
@@ -81,23 +79,11 @@ func (f FrameMetadata) WriteTo(b *buf.Buffer) error {
 		case net.Network_UDP:
 			common.Must(b.WriteByte(byte(TargetNetworkUDP)))
 		}
+
 		if err := addrParser.WriteAddressPort(b, f.Target.Address, f.Target.Port); err != nil {
 			return err
 		}
-		if f.Inbound != nil {
-			if f.Inbound.Source.Network == net.Network_TCP || f.Inbound.Source.Network == net.Network_UDP {
-				common.Must(b.WriteByte(byte(f.Inbound.Source.Network - 1)))
-				if err := addrParser.WriteAddressPort(b, f.Inbound.Source.Address, f.Inbound.Source.Port); err != nil {
-					return err
-				}
-				if f.Inbound.Local.Network == net.Network_TCP || f.Inbound.Local.Network == net.Network_UDP {
-					common.Must(b.WriteByte(byte(f.Inbound.Local.Network - 1)))
-					if err := addrParser.WriteAddressPort(b, f.Inbound.Local.Address, f.Inbound.Local.Port); err != nil {
-						return err
-					}
-				}
-			}
-		} else if b.UDP != nil { // make sure it's user's proxy request
+		if b.UDP != nil { // make sure it's user's proxy request
 			b.Write(f.GlobalID[:]) // no need to check whether it's empty
 		}
 	} else if b.UDP != nil {
@@ -111,7 +97,7 @@ func (f FrameMetadata) WriteTo(b *buf.Buffer) error {
 }
 
 // Unmarshal reads FrameMetadata from the given reader.
-func (f *FrameMetadata) Unmarshal(reader io.Reader, readSourceAndLocal bool) error {
+func (f *FrameMetadata) Unmarshal(reader io.Reader) error {
 	metaLen, err := serial.ReadUint16(reader)
 	if err != nil {
 		return err
@@ -126,12 +112,12 @@ func (f *FrameMetadata) Unmarshal(reader io.Reader, readSourceAndLocal bool) err
 	if _, err := b.ReadFullFrom(reader, int32(metaLen)); err != nil {
 		return err
 	}
-	return f.UnmarshalFromBuffer(b, readSourceAndLocal)
+	return f.UnmarshalFromBuffer(b)
 }
 
 // UnmarshalFromBuffer reads a FrameMetadata from the given buffer.
 // Visible for testing only.
-func (f *FrameMetadata) UnmarshalFromBuffer(b *buf.Buffer, readSourceAndLocal bool) error {
+func (f *FrameMetadata) UnmarshalFromBuffer(b *buf.Buffer) error {
 	if b.Len() < 4 {
 		return errors.New("insufficient buffer: ", b.Len())
 	}
@@ -162,54 +148,6 @@ func (f *FrameMetadata) UnmarshalFromBuffer(b *buf.Buffer, readSourceAndLocal bo
 		default:
 			return errors.New("unknown network type: ", network)
 		}
-	}
-
-	if f.SessionStatus == SessionStatusNew && readSourceAndLocal {
-		f.Inbound = &session.Inbound{}
-
-		if b.Len() == 0 {
-			return nil // for heartbeat, etc.
-		}
-		network := TargetNetwork(b.Byte(0))
-		if network == 0 {
-			return nil // may be padding
-		}
-		b.Advance(1)
-		addr, port, err := addrParser.ReadAddressPort(nil, b)
-		if err != nil {
-			return errors.New("reading source: failed to parse address and port").Base(err)
-		}
-		switch network {
-		case TargetNetworkTCP:
-			f.Inbound.Source = net.TCPDestination(addr, port)
-		case TargetNetworkUDP:
-			f.Inbound.Source = net.UDPDestination(addr, port)
-		default:
-			return errors.New("reading source: unknown network type: ", network)
-		}
-
-		if b.Len() == 0 {
-			return nil
-		}
-		network = TargetNetwork(b.Byte(0))
-		if network == 0 {
-			return nil
-		}
-		b.Advance(1)
-		addr, port, err = addrParser.ReadAddressPort(nil, b)
-		if err != nil {
-			return errors.New("reading local: failed to parse address and port").Base(err)
-		}
-		switch network {
-		case TargetNetworkTCP:
-			f.Inbound.Local = net.TCPDestination(addr, port)
-		case TargetNetworkUDP:
-			f.Inbound.Local = net.UDPDestination(addr, port)
-		default:
-			return errors.New("reading local: unknown network type: ", network)
-		}
-
-		return nil
 	}
 
 	// Application data is essential, to test whether the pipe is closed.

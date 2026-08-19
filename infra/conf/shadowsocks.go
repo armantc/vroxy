@@ -162,46 +162,22 @@ func buildShadowsocks2022(v *ShadowsocksServerConfig) (proto.Message, error) {
 type ShadowsocksServerTarget struct {
 	Address    *Address `json:"address"`
 	Port       uint16   `json:"port"`
-	Level      byte     `json:"level"`
-	Email      string   `json:"email"`
 	Cipher     string   `json:"method"`
 	Password   string   `json:"password"`
+	Email      string   `json:"email"`
+	Level      byte     `json:"level"`
 	IVCheck    bool     `json:"ivCheck"`
 	UoT        bool     `json:"uot"`
 	UoTVersion int      `json:"uotVersion"`
 }
 
 type ShadowsocksClientConfig struct {
-	Address    *Address                   `json:"address"`
-	Port       uint16                     `json:"port"`
-	Level      byte                       `json:"level"`
-	Email      string                     `json:"email"`
-	Cipher     string                     `json:"method"`
-	Password   string                     `json:"password"`
-	IVCheck    bool                       `json:"ivCheck"`
-	UoT        bool                       `json:"uot"`
-	UoTVersion int                        `json:"uotVersion"`
-	Servers    []*ShadowsocksServerTarget `json:"servers"`
+	Servers []*ShadowsocksServerTarget `json:"servers"`
 }
 
 func (v *ShadowsocksClientConfig) Build() (proto.Message, error) {
-	if v.Address != nil {
-		v.Servers = []*ShadowsocksServerTarget{
-			{
-				Address:    v.Address,
-				Port:       v.Port,
-				Level:      v.Level,
-				Email:      v.Email,
-				Cipher:     v.Cipher,
-				Password:   v.Password,
-				IVCheck:    v.IVCheck,
-				UoT:        v.UoT,
-				UoTVersion: v.UoTVersion,
-			},
-		}
-	}
-	if len(v.Servers) != 1 {
-		return nil, errors.New(`Shadowsocks settings: "servers" should have one and only one member. Multiple endpoints in "servers" should use multiple Shadowsocks outbounds and routing balancer instead`)
+	if len(v.Servers) == 0 {
+		return nil, errors.New("0 Shadowsocks server configured.")
 	}
 
 	if len(v.Servers) == 1 {
@@ -229,7 +205,8 @@ func (v *ShadowsocksClientConfig) Build() (proto.Message, error) {
 	}
 
 	config := new(shadowsocks.ClientConfig)
-	for _, server := range v.Servers {
+	serverSpecs := make([]*protocol.ServerEndpoint, len(v.Servers))
+	for idx, server := range v.Servers {
 		if C.Contains(shadowaead_2022.List, server.Cipher) {
 			return nil, errors.New("Shadowsocks 2022 accept no multi servers")
 		}
@@ -255,16 +232,19 @@ func (v *ShadowsocksClientConfig) Build() (proto.Message, error) {
 		ss := &protocol.ServerEndpoint{
 			Address: server.Address.Build(),
 			Port:    uint32(server.Port),
-			User:    &protocol.User{
-				Level:   uint32(server.Level),
-				Email:   server.Email,
-				Account: serial.ToTypedMessage(account),
+			User: []*protocol.User{
+				{
+					Level:   uint32(server.Level),
+					Email:   server.Email,
+					Account: serial.ToTypedMessage(account),
+				},
 			},
 		}
 
-		config.Server = ss
-		break
+		serverSpecs[idx] = ss
 	}
+
+	config.Server = serverSpecs
 
 	return config, nil
 }

@@ -35,11 +35,6 @@ func (s *LocalNameServer) Name() string {
 	return "localhost"
 }
 
-// IsDisableCache implements Server.
-func (s *LocalNameServer) IsDisableCache() bool {
-	return true
-}
-
 // NewLocalNameServer creates localdns server object for directly lookup in system DNS.
 func NewLocalNameServer() *LocalNameServer {
 	errors.LogInfo(context.Background(), "DNS: created localhost client")

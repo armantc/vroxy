@@ -17,13 +17,13 @@ const (
 	inboundSessionKey         ctx.SessionKey = 1
 	outboundSessionKey        ctx.SessionKey = 2
 	contentSessionKey         ctx.SessionKey = 3
-	isReverseMuxKey           ctx.SessionKey = 4  // is reverse mux
+	muxPreferredSessionKey    ctx.SessionKey = 4  // unused
 	sockoptSessionKey         ctx.SessionKey = 5  // used by dokodemo to only receive sockopt.Mark
 	trackedConnectionErrorKey ctx.SessionKey = 6  // used by observer to get outbound error
 	dispatcherKey             ctx.SessionKey = 7  // used by ss2022 inbounds to get dispatcher
 	timeoutOnlyKey            ctx.SessionKey = 8  // mux context's child contexts to only cancel when its own traffic times out
 	allowedNetworkKey         ctx.SessionKey = 9  // muxcool server control incoming request tcp/udp
-	fullHandlerKey            ctx.SessionKey = 10 // outbound gets full handler
+	handlerSessionKey         ctx.SessionKey = 10 // outbound gets full handler
 	mitmAlpn11Key             ctx.SessionKey = 11 // used by TLS dialer
 	mitmServerNameKey         ctx.SessionKey = 12 // used by TLS dialer
 )
@@ -75,21 +75,25 @@ func ContentFromContext(ctx context.Context) *Content {
 	return nil
 }
 
-func ContextWithIsReverseMux(ctx context.Context, isReverseMux bool) context.Context {
-	return context.WithValue(ctx, isReverseMuxKey, isReverseMux)
+// ContextWithMuxPreferred returns a new context with the given bool
+func ContextWithMuxPreferred(ctx context.Context, forced bool) context.Context {
+	return context.WithValue(ctx, muxPreferredSessionKey, forced)
 }
 
-func IsReverseMuxFromContext(ctx context.Context) bool {
-	if val, ok := ctx.Value(isReverseMuxKey).(bool); ok {
+// MuxPreferredFromContext returns value in this context, or false if not contained.
+func MuxPreferredFromContext(ctx context.Context) bool {
+	if val, ok := ctx.Value(muxPreferredSessionKey).(bool); ok {
 		return val
 	}
 	return false
 }
 
+// ContextWithSockopt returns a new context with Socket configs included
 func ContextWithSockopt(ctx context.Context, s *Sockopt) context.Context {
 	return context.WithValue(ctx, sockoptSessionKey, s)
 }
 
+// SockoptFromContext returns Socket configs in this context, or nil if not contained.
 func SockoptFromContext(ctx context.Context) *Sockopt {
 	if sockopt, ok := ctx.Value(sockoptSessionKey).(*Sockopt); ok {
 		return sockopt
@@ -160,12 +164,12 @@ func AllowedNetworkFromContext(ctx context.Context) net.Network {
 	return net.Network_Unknown
 }
 
-func ContextWithFullHandler(ctx context.Context, handler outbound.Handler) context.Context {
-	return context.WithValue(ctx, fullHandlerKey, handler)
+func ContextWithHandler(ctx context.Context, handler outbound.Handler) context.Context {
+	return context.WithValue(ctx, handlerSessionKey, handler)
 }
 
-func FullHandlerFromContext(ctx context.Context) outbound.Handler {
-	if val, ok := ctx.Value(fullHandlerKey).(outbound.Handler); ok {
+func HandlerFromContext(ctx context.Context) outbound.Handler {
+	if val, ok := ctx.Value(handlerSessionKey).(outbound.Handler); ok {
 		return val
 	}
 	return nil
