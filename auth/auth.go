@@ -218,6 +218,7 @@ func radiusClient(clientData ClientWorkerData) {
 	rfc2865.UserPassword_SetString(packet, clientData.Password)
 	rfc2865.NASIdentifier_SetString(packet, clientData.Key)
 	rfc2868.TunnelClientEndpoint_SetString(packet, uint8(0), clientData.ClientIp)
+	rfc2868.TunnelServerEndpoint_SetString(packet, uint8(0), GetPublicIp())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
