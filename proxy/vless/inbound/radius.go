@@ -21,6 +21,7 @@ import (
 	"github.com/xtls/xray-core/common/protocol"
 	"github.com/xtls/xray-core/common/uuid"
 	"github.com/xtls/xray-core/features/stats"
+	"github.com/xtls/xray-core/proxy"
 	"github.com/xtls/xray-core/proxy/vless"
 	"github.com/xtls/xray-core/transport/internet/stat"
 )
@@ -284,6 +285,11 @@ func (c *radiusTrafficConnection) UnwrapWithCounters() (stdnet.Conn, stats.Count
 	return stat.TryUnwrapStatsConn(c.Conn), &c.read, &c.written
 }
 
+// SuppressCloseNotify preserves Vision's TLS close behavior through accounting.
+func (c *radiusTrafficConnection) SuppressCloseNotify() {
+	proxy.SuppressOuterCloseNotify(c.Conn)
+}
+
 func (c *radiusTrafficConnection) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
 	c.read.Add(int64(n))
@@ -354,7 +360,7 @@ func (s *radiusSession) response() Session {
 	return Session{Key: s.key, Identity: s.identity, ClientIP: s.clientIP, ServerIP: s.serverIP, CreatedAt: s.createdAt.Unix(), Traffic: upload + download}
 }
 
-func (v *radiusValidator) beginSession(key, identity, clientIP, serverIP string, conn stdnet.Conn, traffic *radiusTrafficConnection) (uint64, bool) {
+func (v *radiusValidator) beginSession(key, identity, clientIP, serverIP string, conn stdnet.Conn, traffic *radiusTrafficConnection, bufferedRead int64) (uint64, bool) {
 	v.sessionMu.Lock()
 	defer v.sessionMu.Unlock()
 	if expires, blocked := v.blocked[key]; blocked && time.Now().Before(expires) {
@@ -371,7 +377,9 @@ func (v *radiusValidator) beginSession(key, identity, clientIP, serverIP string,
 	if v.sessions[key] == nil {
 		v.sessions[key] = make(map[uint64]*radiusSession)
 	}
-	v.sessions[key][id] = &radiusSession{conn: conn, key: key, identity: identity, clientIP: clientIP, serverIP: serverIP, createdAt: time.Now().UTC(), traffic: traffic, readAtStart: traffic.read.Value(), writtenAtStart: traffic.written.Value()}
+	// Header parsing may prefetch application bytes. Keep that buffered payload
+	// in the session total while excluding the consumed handshake bytes.
+	v.sessions[key][id] = &radiusSession{conn: conn, key: key, identity: identity, clientIP: clientIP, serverIP: serverIP, createdAt: time.Now().UTC(), traffic: traffic, readAtStart: traffic.read.Value() - bufferedRead, writtenAtStart: traffic.written.Value()}
 	return id, true
 }
 

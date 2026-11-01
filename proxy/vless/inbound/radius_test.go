@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,9 @@ import (
 	"time"
 
 	"github.com/xtls/xray-core/common/uuid"
+	"github.com/xtls/xray-core/proxy"
+	"github.com/xtls/xray-core/proxy/vless/encryption"
+	"github.com/xtls/xray-core/transport/internet/stat"
 )
 
 func TestRadiusControlDisconnectAndRelease(t *testing.T) {
@@ -24,7 +28,7 @@ func TestRadiusControlDisconnectAndRelease(t *testing.T) {
 
 	nas := "uuid=test;client_ip=192.0.2.1;public_ip=198.51.100.1"
 	traffic := &radiusTrafficConnection{Conn: server}
-	if _, allowed := validator.beginSession(nas, "test", "192.0.2.1", "198.51.100.1", server, traffic); !allowed {
+	if _, allowed := validator.beginSession(nas, "test", "192.0.2.1", "198.51.100.1", server, traffic, 0); !allowed {
 		t.Fatal("new session unexpectedly blocked")
 	}
 	request := httptest.NewRequest(http.MethodPost, radiusDisconnectPath, strings.NewReader(`{"key":"`+nas+`"}`))
@@ -37,7 +41,7 @@ func TestRadiusControlDisconnectAndRelease(t *testing.T) {
 	if _, err := client.Read(make([]byte, 1)); err == nil {
 		t.Fatal("disconnect did not close active session")
 	}
-	if _, allowed := validator.beginSession(nas, "test", "192.0.2.1", "198.51.100.1", server, traffic); allowed {
+	if _, allowed := validator.beginSession(nas, "test", "192.0.2.1", "198.51.100.1", server, traffic, 0); allowed {
 		t.Fatal("blocked NAS-Identifier opened a session")
 	}
 
@@ -47,7 +51,7 @@ func TestRadiusControlDisconnectAndRelease(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("release status = %d", response.Code)
 	}
-	if _, allowed := validator.beginSession(nas, "test", "192.0.2.1", "198.51.100.1", server, traffic); !allowed {
+	if _, allowed := validator.beginSession(nas, "test", "192.0.2.1", "198.51.100.1", server, traffic, 0); !allowed {
 		t.Fatal("released NAS-Identifier remained blocked")
 	}
 }
@@ -59,7 +63,7 @@ func TestRadiusSessionsResponseIncludesLastSync(t *testing.T) {
 		closedSessions: make(map[string]*closedRadiusSession),
 	}
 	traffic := &radiusTrafficConnection{}
-	if _, allowed := validator.beginSession("key", "identity", "192.0.2.1", "198.51.100.1", nil, traffic); !allowed {
+	if _, allowed := validator.beginSession("key", "identity", "192.0.2.1", "198.51.100.1", nil, traffic, 0); !allowed {
 		t.Fatal("new session unexpectedly blocked")
 	}
 	control := radiusControlAPI{validators: map[*radiusValidator]struct{}{validator: {}}}
@@ -175,7 +179,7 @@ func TestRadiusTrafficIsNotDoubleCounted(t *testing.T) {
 	}
 	key := "0123456789abcdef"
 	traffic := &radiusTrafficConnection{}
-	id, allowed := validator.beginSession(key, "identity", "192.0.2.1", "198.51.100.1", nil, traffic)
+	id, allowed := validator.beginSession(key, "identity", "192.0.2.1", "198.51.100.1", nil, traffic, 0)
 	if !allowed {
 		t.Fatal("session unexpectedly blocked")
 	}
@@ -194,7 +198,7 @@ func TestRadiusTrafficIsNotDoubleCounted(t *testing.T) {
 	}
 
 	secondTraffic := &radiusTrafficConnection{}
-	_, allowed = validator.beginSession(key, "identity", "192.0.2.1", "198.51.100.1", nil, secondTraffic)
+	_, allowed = validator.beginSession(key, "identity", "192.0.2.1", "198.51.100.1", nil, secondTraffic, 0)
 	if !allowed {
 		t.Fatal("second session unexpectedly blocked")
 	}
@@ -260,7 +264,7 @@ func TestRadiusRejectDisconnectsAllKeyConnections(t *testing.T) {
 		client, server := net.Pipe()
 		clients = append(clients, client)
 		traffic := &radiusTrafficConnection{Conn: server}
-		if _, allowed := validator.beginSession(key, "identity", "192.0.2.1", "198.51.100.1", traffic, traffic); !allowed {
+		if _, allowed := validator.beginSession(key, "identity", "192.0.2.1", "198.51.100.1", traffic, traffic, 0); !allowed {
 			t.Fatal("session unexpectedly blocked before RADIUS response")
 		}
 	}
@@ -297,7 +301,7 @@ func TestRadiusRequestErrorDoesNotRejectSession(t *testing.T) {
 	defer client.Close()
 	defer server.Close()
 	traffic := &radiusTrafficConnection{Conn: server}
-	if _, allowed := validator.beginSession("key", "identity", "192.0.2.1", "198.51.100.1", traffic, traffic); !allowed {
+	if _, allowed := validator.beginSession("key", "identity", "192.0.2.1", "198.51.100.1", traffic, traffic, 0); !allowed {
 		t.Fatal("session unexpectedly blocked")
 	}
 	validator.authorizeAsync(uuid.UUID{1}, "key", "192.0.2.1", "198.51.100.1")
@@ -380,5 +384,47 @@ func waitRadiusIdle(t *testing.T, validator *radiusValidator) {
 			t.Fatal("timed out waiting for RADIUS worker")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+// Vision bypasses Read/Write after switching to direct copy. Both ordinary
+// and ML-KEM connections must still expose the session counters at that point.
+func TestRadiusVisionUnwrap(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		t.Run(fmt.Sprint(encrypted), func(t *testing.T) {
+			client, server := net.Pipe()
+			defer client.Close()
+			defer server.Close()
+			traffic := &radiusTrafficConnection{Conn: &stat.CounterConnection{Connection: server, ReadCounter: &radiusCounter{}, WriteCounter: &radiusCounter{}}}
+			var conn net.Conn = traffic
+			if encrypted {
+				conn = encryption.NewCommonConn(conn, true)
+			}
+			raw, read, written := proxy.UnwrapRawConn(conn)
+			if raw != server || read != &traffic.read || written != &traffic.written {
+				t.Fatal("Vision lost the raw connection or RADIUS counters")
+			}
+			read.Add(23)
+			written.Add(41)
+			if traffic.read.Value() != 23 || traffic.written.Value() != 41 {
+				t.Fatal("direct-copy traffic was not charged to the session")
+			}
+		})
+	}
+}
+
+type radiusSuppressConn struct {
+	net.Conn
+	suppressed bool
+}
+
+func (c *radiusSuppressConn) SuppressCloseNotify() { c.suppressed = true }
+
+func TestRadiusVisionSuppressCloseNotify(t *testing.T) {
+	underlying := &radiusSuppressConn{}
+	traffic := &radiusTrafficConnection{Conn: &stat.CounterConnection{Connection: underlying}}
+	proxy.SuppressOuterCloseNotify(traffic)
+	if !underlying.suppressed {
+		t.Fatal("Vision close-notify suppression did not reach the transport")
 	}
 }
