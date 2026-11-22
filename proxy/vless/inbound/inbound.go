@@ -635,6 +635,12 @@ func (h *Handler) Process(ctx context.Context, network net.Network, connection s
 		return errors.New("unknown request flow " + requestAddons.Flow)
 	}
 
+	if radiusTraffic != nil {
+		// Kernel splice only reports progress when ReadFrom returns. Keep Vision
+		// on its buffered direct-copy path so active sessions count each write.
+		inbound.CanSpliceCopy = 3
+	}
+
 	if request.Command != protocol.RequestCommandMux {
 		ctx = log.ContextWithAccessMessage(ctx, &log.AccessMessage{
 			From:   connection.RemoteAddr(),

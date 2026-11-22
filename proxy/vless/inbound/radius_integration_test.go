@@ -94,22 +94,29 @@ func TestRadiusInboundLifecycle(t *testing.T) {
 		}
 		return conn
 	}
-	echo := func(conn net.Conn) {
+	payload := strings.Repeat("radius-traffic", 1024)
+	echo := func(conn net.Conn, firstResponse bool) {
 		t.Helper()
-		payload := strings.Repeat("radius-traffic", 1024)
 		if _, err := io.WriteString(conn, payload); err != nil {
 			t.Fatal(err)
 		}
-		response := make([]byte, 2+len(payload))
+		headerLen := 0
+		if firstResponse {
+			headerLen = 2
+		}
+		response := make([]byte, headerLen+len(payload))
 		if _, err := io.ReadFull(conn, response); err != nil {
 			t.Fatal(err)
 		}
-		if response[0] != 0 || response[1] != 0 || string(response[2:]) != payload {
+		if firstResponse && (response[0] != 0 || response[1] != 0) {
+			t.Fatal("invalid VLESS response header")
+		}
+		if string(response[headerLen:]) != payload {
 			t.Fatal("VLESS echo response differs from request")
 		}
 	}
 	conn := open()
-	echo(conn)
+	echo(conn, true)
 	select {
 	case <-authorized:
 	case <-time.After(3 * time.Second):
@@ -129,11 +136,24 @@ func TestRadiusInboundLifecycle(t *testing.T) {
 		}
 		return result
 	}
-	active := sessions()
-	if len(active) != 1 || active[0].Identity != id.String() || active[0].Traffic < int64(2*len(strings.Repeat("radius-traffic", 1024))) {
-		t.Fatalf("missing session or traffic: %+v", active)
+	waitForTraffic := func(expected int64) inbound.Session {
+		t.Helper()
+		deadline := time.Now().Add(time.Second)
+		for {
+			active := sessions()
+			if len(active) == 1 && active[0].Identity == id.String() && active[0].Traffic == expected {
+				return active[0]
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("expected %d bytes for the session, got %+v", expected, active)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
-	key := active[0].Key
+	first := waitForTraffic(int64(2*len(payload) + 2))
+	echo(conn, false)
+	active := waitForTraffic(first.Traffic + int64(2*len(payload)))
+	key := active.Key
 	control := func(action string) {
 		t.Helper()
 		response, err := client.Post("http://127.0.0.1:8585/api/"+action, "application/json", strings.NewReader(fmt.Sprintf(`{"key":%q}`, key)))
@@ -155,7 +175,7 @@ func TestRadiusInboundLifecycle(t *testing.T) {
 	}
 	control("release")
 	released := open()
-	echo(released)
+	echo(released, true)
 	select {
 	case <-authorized:
 	case <-time.After(3 * time.Second):
@@ -163,7 +183,7 @@ func TestRadiusInboundLifecycle(t *testing.T) {
 	}
 	// Ensure the API's last-sync field and cumulative traffic remain available.
 	after := sessions()
-	if len(after) != 1 || after[0].Traffic <= active[0].Traffic || after[0].LastSync == 0 {
+	if len(after) != 1 || after[0].Traffic <= active.Traffic || after[0].LastSync == 0 {
 		t.Fatalf("released session lost accounting: %+v", after)
 	}
 }
